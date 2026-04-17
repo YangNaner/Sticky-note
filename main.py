@@ -5,14 +5,28 @@ import os
 import sys
 from tkinter import mainloop
 import threading
+import portalocker
 
 CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".sticky_notes")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "notes.json")
+LOCK_FILE = os.path.join(CONFIG_DIR, ".lock")
 
 notes = []
 app = None
 is_hidden = False
 tray_icon = None
+lock_file = None
+
+def check_single_instance():
+    global lock_file
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    try:
+        lock_file = open(LOCK_FILE, 'w')
+        portalocker.lock(lock_file, portalocker.LOCK_EX | portalocker.LOCK_NB)
+        lock_file.write(str(os.getpid()))
+        return True
+    except (IOError, OSError, portalocker.exceptions.AlreadyLocked):
+        return False
 
 def load_notes():
     if os.path.exists(CONFIG_FILE):
@@ -72,14 +86,20 @@ def on_closing():
     save_notes()
     for note in notes:
         note.destroy()
+    if lock_file:
+        try:
+            portalocker.unlock(lock_file)
+            lock_file.close()
+            os.remove(LOCK_FILE)
+        except:
+            pass
     sys.exit()
 
 def show_notification(title, message):
     try:
-        from win10toast import ToastNotifier
-        toaster = ToastNotifier()
-        toaster.show_toast(title, message, duration=3)
-    except ImportError:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, message, title, 0x40)
+    except Exception as e:
         pass
 
 def setup_tray():
@@ -87,8 +107,12 @@ def setup_tray():
     import PIL.Image
 
     def create_image():
-        img = PIL.Image.new('RGB', (64, 64), color='#FFE866')
-        return img
+        import sys
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+        return PIL.Image.open(os.path.join(base_path, "logo.ico"))
 
     def get_menu():
         global is_hidden
@@ -120,7 +144,19 @@ def setup_tray():
 
     def quit_app(icon, item):
         if app:
-            app.after(0, lambda: (save_notes(), [note.destroy() for note in notes], os._exit(0)))
+            def do_quit():
+                save_notes()
+                for note in notes:
+                    note.destroy()
+                if lock_file:
+                    try:
+                        portalocker.unlock(lock_file)
+                        lock_file.close()
+                        os.remove(LOCK_FILE)
+                    except:
+                        pass
+                os._exit(0)
+            app.after(0, do_quit)
 
     menu = get_menu()
 
@@ -130,7 +166,7 @@ def setup_tray():
     def send_notify():
         import time
         time.sleep(0.5)
-        show_notification("便利贴", "便利贴已启动")
+        show_notification("Sticky-note", "便利贴已启动")
 
     notify_thread = threading.Thread(target=send_notify, daemon=True)
     notify_thread.start()
@@ -138,17 +174,17 @@ def setup_tray():
     tray_icon.run()
 
 def bring_all_to_front():
-    # 先将所有窗口设为非置顶，然后提升
     for note in notes:
         note.wm_attributes("-topmost", False)
-    # 等待一下再提升
-    import time
-    time.sleep(0.05)
-    for note in notes:
         note.lift()
 
 def main():
     global app
+    if not check_single_instance():
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, "程序已在运行", "Sticky-note", 0x40)
+        sys.exit()
+
     app = ctk.CTk()
     app.withdraw()
 
