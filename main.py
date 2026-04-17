@@ -11,6 +11,8 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "notes.json")
 
 notes = []
 app = None
+is_hidden = False
+tray_icon = None
 
 def load_notes():
     if os.path.exists(CONFIG_FILE):
@@ -30,16 +32,55 @@ def save_notes():
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(notes_data, f, ensure_ascii=False, indent=2)
 
-def create_note(x=100, y=100, content=""):
+def create_note_in_main(x=100, y=100, content=""):
     note = StickyNote(x=x, y=y, content=content)
     notes.append(note)
+
+    def on_destroy_callback(n):
+        notes.remove(n)
+        save_notes()
+
+    def on_create_note_callback(n):
+        def do_create():
+            add_note_to_main()
+        app.after(0, do_create)
+
+    note.on_destroy_callback = on_destroy_callback
+    note.on_create_note_callback = on_create_note_callback
+    note.on_close_callback = on_closing
+
     return note
+
+def add_note_to_main():
+    if notes:
+        # 已有便签，出现在最左上方便签的左上方
+        min_x = min(n.winfo_x() for n in notes)
+        min_y = min(n.winfo_y() for n in notes)
+        create_note_in_main(x=min_x - 30, y=min_y - 30)
+    else:
+        # 没有便签，出现在屏幕右下角
+        import screeninfo
+        monitor = screeninfo.get_monitors()[0]
+        x = monitor.x + monitor.width - 300
+        y = monitor.y + monitor.height - 350
+        create_note_in_main(x=x, y=y)
+
+def create_note(x=100, y=100, content=""):
+    return create_note_in_main(x, y, content)
 
 def on_closing():
     save_notes()
     for note in notes:
         note.destroy()
     sys.exit()
+
+def show_notification(title, message):
+    try:
+        from win10toast import ToastNotifier
+        toaster = ToastNotifier()
+        toaster.show_toast(title, message, duration=3)
+    except ImportError:
+        pass
 
 def setup_tray():
     from pystray import Icon, Menu, MenuItem
@@ -49,41 +90,62 @@ def setup_tray():
         img = PIL.Image.new('RGB', (64, 64), color='#FFE866')
         return img
 
-    def show_window(icon, item):
-        if app:
-            app.after(0, lambda: [note.deiconify() for note in notes])
+    def get_menu():
+        global is_hidden
+        check = " ✓" if is_hidden else ""
+        return Menu(
+            MenuItem("新建便签", add_note),
+            MenuItem("展示", show_all),
+            MenuItem(f"隐藏{check}", toggle_hide),
+            MenuItem("关闭", quit_app)
+        )
 
-    def hide_window(icon, item):
+    def show_all(icon, item):
         if app:
-            app.after(0, lambda: [note.withdraw() for note in notes])
+            app.after(0, bring_all_to_front)
 
     def add_note(icon, item):
         if app:
-            def do_add():
-                create_note(x=200, y=200)
-                if notes:
-                    def on_note_close(n=notes[-1]):
-                        notes.remove(n)
-                        n.destroy()
-                        if not notes:
-                            save_notes()
-                            os._exit(0)
-                    notes[-1].on_close_callback = on_note_close
-            app.after(0, do_add)
+            app.after(0, add_note_to_main)
+
+    def toggle_hide(icon, item):
+        global is_hidden, tray_icon
+        is_hidden = not is_hidden
+        if app:
+            if is_hidden:
+                app.after(0, lambda: [note.withdraw() for note in notes])
+            else:
+                app.after(0, lambda: [note.deiconify() for note in notes])
+        tray_icon.menu = get_menu()
 
     def quit_app(icon, item):
         if app:
             app.after(0, lambda: (save_notes(), [note.destroy() for note in notes], os._exit(0)))
 
-    menu = Menu(
-        MenuItem("显示", show_window),
-        MenuItem("隐藏", hide_window),
-        MenuItem("新建便签", add_note),
-        MenuItem("退出", quit_app)
-    )
+    menu = get_menu()
 
-    icon = Icon("sticky_notes", create_image(), "便利贴", menu)
-    icon.run()
+    global tray_icon
+    tray_icon = Icon("sticky_notes", create_image(), "便利贴", menu)
+
+    def send_notify():
+        import time
+        time.sleep(0.5)
+        show_notification("便利贴", "便利贴已启动")
+
+    notify_thread = threading.Thread(target=send_notify, daemon=True)
+    notify_thread.start()
+
+    tray_icon.run()
+
+def bring_all_to_front():
+    # 先将所有窗口设为非置顶，然后提升
+    for note in notes:
+        note.wm_attributes("-topmost", False)
+    # 等待一下再提升
+    import time
+    time.sleep(0.05)
+    for note in notes:
+        note.lift()
 
 def main():
     global app
@@ -95,6 +157,10 @@ def main():
     tray_thread = threading.Thread(target=setup_tray, daemon=True)
     tray_thread.start()
 
+    # 等待托盘初始化
+    import time
+    time.sleep(0.5)
+
     notes_data = load_notes()
 
     if notes_data:
@@ -104,11 +170,6 @@ def main():
                 y=data.get("y", 100),
                 content=data.get("content", "")
             )
-    else:
-        create_note(x=100, y=100)
-
-    for note in notes:
-        note.on_close_callback = on_closing
 
     mainloop()
 

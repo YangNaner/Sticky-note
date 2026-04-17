@@ -1,37 +1,51 @@
 import customtkinter as ctk
+from tkinter import Menu as TkMenu
 
 class StickyNote(ctk.CTk):
     def __init__(self, x=100, y=100, content=""):
         super().__init__()
 
         self.on_close_callback = None
+        self.on_destroy_callback = None
 
         self.overrideredirect(True)
         self.geometry(f"250x300+{x}+{y}")
         self.configure(fg_color="#FFE866")
+        self.wm_attributes("-topmost", False)
 
-        # 拖动区域（顶部深黄色条）
-        self.drag_bar = ctk.CTkFrame(
+        # 外层框架（深黄色边框）
+        self.outer_frame = ctk.CTkFrame(
             self,
-            height=35,
             fg_color="#FFE866",
-            corner_radius=0
+            corner_radius=8,
+            border_width=0
         )
-        self.drag_bar.pack(fill="x")
+        self.outer_frame.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+
+        # 拖动区域（顶部深黄色条，放置在外层框架内）
+        self.drag_bar = ctk.CTkFrame(
+            self.outer_frame,
+            height=20,
+            fg_color="#FFE866",
+            corner_radius=0,
+            border_width=0
+        )
+        self.drag_bar.pack(fill="x", padx=0, pady=(0, 0))
         self.drag_bar.pack_propagate(False)
 
         self.drag_bar.bind("<Button-1>", self.start_drag)
         self.drag_bar.bind("<B1-Motion>", self.drag)
+        self.drag_bar.bind("<Button-3>", self.show_context_menu)
 
-        # 文本输入区域（浅黄色）
+        # 文本输入区域（浅黄色，放置在外层框架内）
         self.text_area = ctk.CTkTextbox(
-            self,
+            self.outer_frame,
             font=("Microsoft YaHei", 11),
             fg_color="#FFFACD",
             border_width=0,
             wrap="word"
         )
-        self.text_area.pack(fill="both", expand=True, padx=0, pady=0)
+        self.text_area.pack(fill="both", expand=True, padx=2, pady=(3, 2))
         if content:
             self.text_area.insert("1.0", content)
 
@@ -44,9 +58,37 @@ class StickyNote(ctk.CTk):
         self._dragging = False
         self._drag_x = 0
         self._drag_y = 0
+        self._is_topmost = False
+
+        # 右键菜单
+        self.context_menu = TkMenu(self, tearoff=0, bg="white", bd=0)
+
+        self.context_menu.add_command(label="新建便签", command=self.create_new_note, background="white")
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label="销毁", command=self.destroy_note, background="white")
+        self.context_menu.add_command(label="置顶 ○", command=self.toggle_topmost, background="white")
 
         self.update_idletasks()
         self.deiconify()
+
+    def show_context_menu(self, event):
+        self.context_menu.post(event.x_root, event.y_root)
+
+    def create_new_note(self):
+        if hasattr(self, 'on_create_note_callback'):
+            self.on_create_note_callback(self)
+
+    def destroy_note(self):
+        if self.on_destroy_callback:
+            self.on_destroy_callback(self)
+        self.destroy()
+
+    def toggle_topmost(self):
+        self._is_topmost = not self._is_topmost
+        self.wm_attributes("-topmost", self._is_topmost)
+        # 更新菜单文字
+        check = " ✓" if self._is_topmost else " ○"
+        self.context_menu.entryconfigure(3, label=f"置顶{check}")
 
     def start_drag(self, event):
         self._dragging = True

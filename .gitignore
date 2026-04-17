@@ -10,3 +10,15 @@ __pycache__/
 
 # 本地配置
 .env
+
+# PyInstaller
+dist/
+build/
+*.spec
+
+# Nuitka
+*.build/
+*.dist/
+main.build/
+main.dist/
+nuitka-crash-report.xml
