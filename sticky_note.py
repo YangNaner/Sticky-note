@@ -2,14 +2,14 @@ import customtkinter as ctk
 from tkinter import Menu as TkMenu
 
 class StickyNote(ctk.CTk):
-    def __init__(self, x=100, y=100, content=""):
+    def __init__(self, x=100, y=100, width=250, height=300, content=""):
         super().__init__()
 
         self.on_close_callback = None
         self.on_destroy_callback = None
 
         self.overrideredirect(True)
-        self.geometry(f"250x300+{x}+{y}")
+        self.geometry(f"{width}x{height}+{x}+{y}")
         self.configure(fg_color="#FFE866")
         self.wm_attributes("-topmost", False)
 
@@ -36,6 +36,10 @@ class StickyNote(ctk.CTk):
         self.drag_bar.bind("<Button-1>", self.start_drag)
         self.drag_bar.bind("<B1-Motion>", self.drag)
         self.drag_bar.bind("<Button-3>", self.show_context_menu)
+        self.drag_bar.bind("<Control-Button-1>", lambda e: self.toggle_topmost())
+
+        # Esc 销毁便签
+        self.bind("<KeyPress-Escape>", lambda e: self.destroy_note())
 
         # 文本输入区域（浅黄色，放置在外层框架内）
         self.text_area = ctk.CTkTextbox(
@@ -51,14 +55,17 @@ class StickyNote(ctk.CTk):
 
         # 文本区域可以输入，不能拖动
         self.text_area.bind("<Button-1>", lambda e: self.text_area.focus_set())
+        self.bind("<Button-1>", self.set_focused)
 
         # 全局释放停止拖动
         self.bind("<ButtonRelease-1>", self.stop_drag)
+        self.bind("<MouseWheel>", self.on_mousewheel)
 
         self._dragging = False
         self._drag_x = 0
         self._drag_y = 0
         self._is_topmost = False
+        self._focused = False
 
         # 右键菜单
         self.context_menu = TkMenu(self, tearoff=0, bg="white", bd=0)
@@ -105,6 +112,29 @@ class StickyNote(ctk.CTk):
 
     def stop_drag(self, event):
         self._dragging = False
+
+    def set_focused(self, event):
+        self._focused = True
+
+    def on_mousewheel(self, event):
+        if self._focused and event.state & 0x4:  # Ctrl key
+            current_width = self.winfo_width()
+            current_height = self.winfo_height()
+            delta = 30 if event.delta > 0 else -30
+            # 保持 5:6 比例
+            # new_width = max(200, min(400, current_width + delta))
+            # new_height = max(150, min(600, current_height + int(delta * 1.2)))
+
+            # 先计算新宽度（受限于 200~400）
+            new_width = max(200, min(800, current_width + delta))
+
+            # 用新宽度 严格按 5:6 计算高度
+            new_height = int(new_width * 6 / 5)  # 5:6 → 高 = 宽 × 1.2
+
+            # 高度也限制范围（如果你需要）
+            new_height = max(240, min(960, new_height))
+
+            self.geometry(f"{new_width}x{new_height}")
 
     def close(self):
         if self.on_close_callback:

@@ -40,14 +40,16 @@ def save_notes():
         notes_data.append({
             "x": note.winfo_x(),
             "y": note.winfo_y(),
+            "width": note.winfo_width(),
+            "height": note.winfo_height(),
             "content": note.text_area.get("1.0", "end-1c")
         })
     os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(notes_data, f, ensure_ascii=False, indent=2)
 
-def create_note_in_main(x=100, y=100, content=""):
-    note = StickyNote(x=x, y=y, content=content)
+def create_note_in_main(x=100, y=100, width=250, height=300, content=""):
+    note = StickyNote(x=x, y=y, width=width, height=height, content=content)
     notes.append(note)
 
     def on_destroy_callback(n):
@@ -79,8 +81,8 @@ def add_note_to_main():
         y = monitor.y + monitor.height - 350
         create_note_in_main(x=x, y=y)
 
-def create_note(x=100, y=100, content=""):
-    return create_note_in_main(x, y, content)
+def create_note(x=100, y=100, width=250, height=300, content=""):
+    return create_note_in_main(x, y, width, height, content)
 
 def on_closing():
     save_notes()
@@ -175,8 +177,9 @@ def setup_tray():
 
 def bring_all_to_front():
     for note in notes:
-        note.wm_attributes("-topmost", False)
+        note.wm_attributes("-topmost", True)
         note.lift()
+        note.wm_attributes("-topmost", False)
 
 def main():
     global app
@@ -204,6 +207,8 @@ def main():
             create_note(
                 x=data.get("x", 100),
                 y=data.get("y", 100),
+                width=data.get("width", 250),
+                height=data.get("height", 300),
                 content=data.get("content", "")
             )
 
