@@ -2,7 +2,7 @@ import customtkinter as ctk
 from tkinter import Menu as TkMenu
 
 class StickyNote(ctk.CTk):
-    def __init__(self, x=100, y=100, width=250, height=300, content=""):
+    def __init__(self, x=100, y=100, width=250, height=300, font_size=11, content=""):
         super().__init__()
 
         self.on_close_callback = None
@@ -12,6 +12,8 @@ class StickyNote(ctk.CTk):
         self.geometry(f"{width}x{height}+{x}+{y}")
         self.configure(fg_color="#FFE866")
         self.wm_attributes("-topmost", False)
+
+        self._font_size = font_size
 
         # 外层框架（深黄色边框）
         self.outer_frame = ctk.CTkFrame(
@@ -44,7 +46,7 @@ class StickyNote(ctk.CTk):
         # 文本输入区域（浅黄色，放置在外层框架内）
         self.text_area = ctk.CTkTextbox(
             self.outer_frame,
-            font=("Microsoft YaHei", 11),
+            font=("Microsoft YaHei", self._font_size),
             fg_color="#FFFACD",
             border_width=0,
             wrap="word"
@@ -59,7 +61,7 @@ class StickyNote(ctk.CTk):
 
         # 全局释放停止拖动
         self.bind("<ButtonRelease-1>", self.stop_drag)
-        self.bind("<MouseWheel>", self.on_mousewheel)
+        self.text_area.bind("<MouseWheel>", self.on_mousewheel)
 
         self._dragging = False
         self._drag_x = 0
@@ -117,24 +119,19 @@ class StickyNote(ctk.CTk):
         self._focused = True
 
     def on_mousewheel(self, event):
-        if self._focused and event.state & 0x4:  # Ctrl key
-            current_width = self.winfo_width()
-            current_height = self.winfo_height()
-            delta = 30 if event.delta > 0 else -30
-            # 保持 5:6 比例
-            # new_width = max(200, min(400, current_width + delta))
-            # new_height = max(150, min(600, current_height + int(delta * 1.2)))
-
-            # 先计算新宽度（受限于 200~400）
-            new_width = max(200, min(800, current_width + delta))
-
-            # 用新宽度 严格按 5:6 计算高度
-            new_height = int(new_width * 6 / 5)  # 5:6 → 高 = 宽 × 1.2
-
-            # 高度也限制范围（如果你需要）
-            new_height = max(240, min(960, new_height))
-
-            self.geometry(f"{new_width}x{new_height}")
+        if self._focused:
+            if event.state & 0x4:  # Ctrl key - 调整窗口大小
+                current_width = self.winfo_width()
+                delta = 30 if event.delta > 0 else -30
+                new_width = max(200, min(800, current_width + delta))
+                new_height = int(new_width * 6 / 5)
+                new_height = max(240, min(960, new_height))
+                self.geometry(f"{new_width}x{new_height}")
+            elif event.state & 0x20000:  # Alt key - 调整字体大小，阻止冒泡
+                delta = 2 if event.delta > 0 else -2
+                self._font_size = max(8, min(24, self._font_size + delta))
+                self.text_area.configure(font=("Microsoft YaHei", self._font_size))
+                return "break"
 
     def close(self):
         if self.on_close_callback:

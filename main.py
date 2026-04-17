@@ -42,14 +42,15 @@ def save_notes():
             "y": note.winfo_y(),
             "width": note.winfo_width(),
             "height": note.winfo_height(),
+            "font_size": note._font_size,
             "content": note.text_area.get("1.0", "end-1c")
         })
     os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(notes_data, f, ensure_ascii=False, indent=2)
 
-def create_note_in_main(x=100, y=100, width=250, height=300, content=""):
-    note = StickyNote(x=x, y=y, width=width, height=height, content=content)
+def create_note_in_main(x=100, y=100, width=250, height=300, font_size=11, content=""):
+    note = StickyNote(x=x, y=y, width=width, height=height, font_size=font_size, content=content)
     notes.append(note)
 
     def on_destroy_callback(n):
@@ -81,8 +82,8 @@ def add_note_to_main():
         y = monitor.y + monitor.height - 350
         create_note_in_main(x=x, y=y)
 
-def create_note(x=100, y=100, width=250, height=300, content=""):
-    return create_note_in_main(x, y, width, height, content)
+def create_note(x=100, y=100, width=250, height=300, font_size=11, content=""):
+    return create_note_in_main(x, y, width, height, font_size, content)
 
 def on_closing():
     save_notes()
@@ -209,6 +210,7 @@ def main():
                 y=data.get("y", 100),
                 width=data.get("width", 250),
                 height=data.get("height", 300),
+                font_size=data.get("font_size", 11),
                 content=data.get("content", "")
             )
 
