@@ -115,7 +115,9 @@ def setup_tray():
             base_path = sys._MEIPASS
         else:
             base_path = os.path.dirname(os.path.abspath(__file__))
-        return PIL.Image.open(os.path.join(base_path, "logo.ico"))
+        icon_path = os.path.join(base_path, "logo.ico")
+        # pystray需要PNG格式，从ICO转换为PNG
+        return PIL.Image.open(icon_path).convert("RGBA")
 
     def get_menu():
         global is_hidden
