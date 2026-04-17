@@ -23,3 +23,6 @@ main.build/
 main.dist/
 nuitka-crash-report.xml
 CLAUDE.md
+
+# Docs
+docs/
